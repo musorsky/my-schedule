@@ -1,0 +1,1 @@
+{"name":"Расписание","short_name":"Расписание","description":"Расписание занятий","start_url":"/my-schedule/","display":"standalone","background_color":"#0f0f0f","theme_color":"#0f0f0f","lang":"en","scope":"/my-schedule/","icons":[{"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}]}
