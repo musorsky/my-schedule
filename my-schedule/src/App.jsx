@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   MoreHorizontal, Sun, CalendarDays, Map, User, 
   ChevronDown, ChevronLeft, ChevronRight, X, 
-  RefreshCw, Download, Upload, Plus, Pencil 
+  RefreshCw, Download, Upload, Plus, Pencil, Building 
 } from 'lucide-react';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, addDays, subMonths, addMonths, isSameDay, isSameMonth, differenceInCalendarWeeks } from 'date-fns';
 import { parseSchedule } from './parser';
@@ -23,7 +23,6 @@ const getBreakMinutes = (prevEnd, currStart) => {
   return parseTime(currStart) - parseTime(prevEnd);
 };
 
-// Функция форматирования времени перерыва
 const formatBreakTime = (minutes) => {
   if (minutes < 60) return `${minutes} минут`;
   const h = Math.floor(minutes / 60);
@@ -39,9 +38,7 @@ const getWeekParityStr = (date) => {
   return weekDiff % 2 !== 0 ? 'even' : 'odd';
 };
 
-// Проверка: идет ли пара прямо сейчас?
 const isLessonOngoing = (lessonTimeStr, selectedDate, now) => {
-  // Если выбранный день в календаре не совпадает с реальным сегодняшним днем — пара точно не идет сейчас
   if (!isSameDay(selectedDate, now)) return false;
   
   const [startStr, endStr] = lessonTimeStr.split('-');
@@ -54,6 +51,25 @@ const isLessonOngoing = (lessonTimeStr, selectedDate, now) => {
 
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   return currentMinutes >= parseToMinutes(startStr) && currentMinutes <= parseToMinutes(endStr);
+};
+
+// Умный парсер аудитории: возвращает корпус и обрезанный номер кабинета
+const parseRoomInfo = (room) => {
+  if (!room) return { building: null, displayRoom: null };
+  const str = String(room).trim();
+  
+  // Ищем строку, которая начинается с цифры (и вся строка длиннее 2 символов, типа "6306")
+  const match = str.match(/^(\d)(.*)/);
+  
+  if (match && str.length >= 3) {
+    return {
+      building: `${match[1]} корпус`,
+      displayRoom: match[2].trim() // Забираем остаток строки (например, "306" от "6306")
+    };
+  }
+  
+  // Если не похоже на стандартный номер, возвращаем как есть (например, "спорт. зал")
+  return { building: null, displayRoom: str };
 };
 
 
@@ -77,7 +93,6 @@ export default function App() {
   // --- ЖИВОЕ ВРЕМЯ ---
   const [now, setNow] = useState(new Date());
 
-  // Обновляем текущее время каждую минуту (для подсветки идущей пары)
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(timer);
@@ -375,18 +390,15 @@ export default function App() {
             }
 
             const isRemote = isRemoteLesson(lesson);
-            
-            // Проверка: идет ли эта пара прямо сейчас?
             const isOngoing = isLessonOngoing(lesson.time, selectedDate, now);
+            const { building, displayRoom } = parseRoomInfo(lesson.room); // Деструктурируем корпус и обрезанный кабинет
 
             const noteKey = `${currentGroup.groupName}_${selectedDateString}_${lesson.time}_${lesson.subject}`;
             const hasNote = !!notes[noteKey];
 
-            // Динамические стили карточки в зависимости от статуса
             let cardClasses = 'bg-card-bg border border-transparent';
             if (isRemote) cardClasses = 'bg-orange-500/10 border border-orange-500/20';
             
-            // Если пара идет сейчас, перезаписываем стили на неоновую подсветку
             if (isOngoing) {
               cardClasses = isRemote 
                 ? 'bg-orange-500/10 border border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.25)]' 
@@ -411,7 +423,6 @@ export default function App() {
                 <div className={`${cardClasses} rounded-3xl p-5 flex flex-col relative transition-all duration-300`}>
                   <div className="flex justify-between items-start mb-3">
                     <span className={`text-sm font-semibold px-3 py-1 rounded-lg flex gap-2 ${timeBadgeClasses}`}>
-                      {/* НОМЕР ПАРЫ */}
                       {lesson.num && <span className="opacity-80 border-r border-current pr-2">{lesson.num} пара</span>}
                       <span>{lesson.time}</span>
                     </span>
@@ -422,14 +433,23 @@ export default function App() {
                   
                   <div className="flex justify-between items-end mt-1">
                     <div className="flex flex-col gap-1.5 mt-1 flex-1 pr-2 overflow-hidden">
+                      
                       {lesson.teacher && (
                         <p className="text-sm text-gray-400 flex items-center gap-2">
                           <User size={14} className="shrink-0" /> <span className="truncate">{lesson.teacher}</span>
                         </p>
                       )}
-                      {lesson.room && (
+                      
+                      {building && (
                         <p className="text-sm text-gray-400 flex items-center gap-2">
-                          <Map size={14} className="shrink-0" /> <span className="truncate">{lesson.room}</span>
+                          <Building size={14} className="shrink-0" /> <span className="truncate">{building}</span>
+                        </p>
+                      )}
+                      
+                      {/* Если displayRoom есть, показываем уже обрезанный номер (без первой цифры) */}
+                      {displayRoom && (
+                        <p className="text-sm text-gray-400 flex items-center gap-2">
+                          <Map size={14} className="shrink-0" /> <span className="truncate">{displayRoom}</span>
                         </p>
                       )}
                     </div>
