@@ -53,25 +53,19 @@ const isLessonOngoing = (lessonTimeStr, selectedDate, now) => {
   return currentMinutes >= parseToMinutes(startStr) && currentMinutes <= parseToMinutes(endStr);
 };
 
-// Умный парсер аудитории: возвращает корпус и обрезанный номер кабинета
 const parseRoomInfo = (room) => {
   if (!room) return { building: null, displayRoom: null };
   const str = String(room).trim();
-  
-  // Ищем строку, которая начинается с цифры (и вся строка длиннее 2 символов, типа "6306")
   const match = str.match(/^(\d)(.*)/);
   
   if (match && str.length >= 3) {
     return {
       building: `${match[1]} корпус`,
-      displayRoom: match[2].trim() // Забираем остаток строки (например, "306" от "6306")
+      displayRoom: match[2].trim()
     };
   }
-  
-  // Если не похоже на стандартный номер, возвращаем как есть (например, "спорт. зал")
   return { building: null, displayRoom: str };
 };
-
 
 export default function App() {
   const [groupsData, setGroupsData] = useState(null);
@@ -391,7 +385,7 @@ export default function App() {
 
             const isRemote = isRemoteLesson(lesson);
             const isOngoing = isLessonOngoing(lesson.time, selectedDate, now);
-            const { building, displayRoom } = parseRoomInfo(lesson.room); // Деструктурируем корпус и обрезанный кабинет
+            const { building, displayRoom } = parseRoomInfo(lesson.room);
 
             const noteKey = `${currentGroup.groupName}_${selectedDateString}_${lesson.time}_${lesson.subject}`;
             const hasNote = !!notes[noteKey];
@@ -432,24 +426,30 @@ export default function App() {
                   <h3 className="font-semibold text-[17px] leading-tight mb-1 pr-4">{lesson.subject}</h3>
                   
                   <div className="flex justify-between items-end mt-1">
-                    <div className="flex flex-col gap-1.5 mt-1 flex-1 pr-2 overflow-hidden">
+                    
+                    {/* flex-1 позволяет блоку занимать всё свободное место слева от кнопки. overflow-hidden убрал, чтобы текст мог переноситься вниз */}
+                    <div className="flex flex-col gap-1.5 mt-1 flex-1 pr-3">
                       
                       {lesson.teacher && (
-                        <p className="text-sm text-gray-400 flex items-center gap-2">
-                          <User size={14} className="shrink-0" /> <span className="truncate">{lesson.teacher}</span>
+                        // Заменил items-center на items-start и добавил mt-[2px] для иконки, чтобы она была на уровне первой строки. 
+                        // Добавил leading-snug для красивого межстрочного интервала.
+                        <p className="text-sm text-gray-400 flex items-start gap-2">
+                          <User size={14} className="shrink-0 mt-[2px]" /> 
+                          <span className="leading-snug">{lesson.teacher}</span>
                         </p>
                       )}
                       
                       {building && (
-                        <p className="text-sm text-gray-400 flex items-center gap-2">
-                          <Building size={14} className="shrink-0" /> <span className="truncate">{building}</span>
+                        <p className="text-sm text-gray-400 flex items-start gap-2">
+                          <Building size={14} className="shrink-0 mt-[2px]" /> 
+                          <span className="leading-snug">{building}</span>
                         </p>
                       )}
                       
-                      {/* Если displayRoom есть, показываем уже обрезанный номер (без первой цифры) */}
                       {displayRoom && (
-                        <p className="text-sm text-gray-400 flex items-center gap-2">
-                          <Map size={14} className="shrink-0" /> <span className="truncate">{displayRoom}</span>
+                        <p className="text-sm text-gray-400 flex items-start gap-2">
+                          <Map size={14} className="shrink-0 mt-[2px]" /> 
+                          <span className="leading-snug">{displayRoom}</span>
                         </p>
                       )}
                     </div>
