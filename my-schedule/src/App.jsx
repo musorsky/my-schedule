@@ -211,7 +211,6 @@ export default function App() {
 
   const currentGroup = groupsData[selectedGroupIndex];
   
-  // Умный расчет отображения календаря. На десктопе он раскрыт всегда.
   const showMonthView = isCalendarExpanded || isDesktop;
 
   const gridStartDate = showMonthView 
@@ -333,7 +332,10 @@ export default function App() {
                   const parity = getWeekParityStr(date);
                   const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay();
                   const daySchedule = currentGroup.schedule[parity][dayOfWeek] || [];
-                  const isDayRemote = daySchedule.some(isRemoteLesson);
+                  
+                  // ПРОВЕРКА: Если пар > 0 и АБСОЛЮТНО ВСЕ пары дистанционные, тогда день оранжевый
+                  const isDayRemote = daySchedule.length > 0 && daySchedule.every(isRemoteLesson);
+                  
                   const dots = Array.from({ length: Math.min(daySchedule.length, 5) });
 
                   let btnClass = 'text-gray-300 bg-transparent hover:bg-card-bg-light';
@@ -353,7 +355,7 @@ export default function App() {
                       onClick={() => {
                         setSelectedDate(date);
                         setCalendarMonth(startOfMonth(date));
-                        if (!isDesktop) setIsCalendarExpanded(false); // На ПК календарь не сворачивается
+                        if (!isDesktop) setIsCalendarExpanded(false);
                       }}
                       className={`aspect-square rounded-2xl flex flex-col items-center justify-center transition-all ${btnClass}`}
                     >
