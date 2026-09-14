@@ -4,16 +4,15 @@ import {
   ChevronDown, ChevronLeft, ChevronRight, X, 
   RefreshCw, Download, Upload, Plus, Pencil, Building 
 } from 'lucide-react';
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, addDays, subMonths, addMonths, isSameDay, isSameMonth, differenceInCalendarWeeks } from 'date-fns';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, addDays, subDays, subMonths, addMonths, isSameDay, isSameMonth, differenceInCalendarWeeks } from 'date-fns';
 import { parseSchedule } from './parser';
 
-// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (Защищенные от ошибок) ---
+// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 const isRemoteLesson = (lesson) => {
   const searchStr = `${lesson.room || ''} ${lesson.type || ''} ${lesson.subject || ''}`.toLowerCase();
   return searchStr.includes('дист') || searchStr.includes('edu.rguk') || searchStr.includes('портал');
 };
 
-// Жесткая конвертация времени в минуты
 const timeToMinutes = (t) => {
   if (!t) return 0;
   const parts = String(t).trim().split(':');
@@ -24,7 +23,6 @@ const timeToMinutes = (t) => {
   return h * 60 + m;
 };
 
-// Защита от отрицательных чисел и NaN
 const formatTimeRemaining = (minutes) => {
   let safeMinutes = parseInt(minutes, 10);
   if (isNaN(safeMinutes) || safeMinutes < 0) safeMinutes = 0;
@@ -58,14 +56,11 @@ const parseRoomInfo = (room) => {
   return { building: null, displayRoom: str };
 };
 
-
 export default function App() {
   const [groupsData, setGroupsData] = useState(null);
   const [selectedGroupIndex, setSelectedGroupIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  // Отслеживаем ширину экрана
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
 
   useEffect(() => {
@@ -95,6 +90,62 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(now);
   const [calendarMonth, setCalendarMonth] = useState(startOfMonth(now));
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
+
+  // --- СВАЙПЫ (TOUCH EVENTS) ---
+  const [calendarTouch, setCalendarTouch] = useState(null);
+  const [scheduleTouch, setScheduleTouch] = useState(null);
+
+  // Обработчики свайпов по календарю (влево/вправо = месяц или неделя)
+  const onCalendarTouchStart = (e) => setCalendarTouch({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
+  const onCalendarTouchEnd = (e) => {
+    if (!calendarTouch) return;
+    const diffX = calendarTouch.x - e.changedTouches[0].clientX;
+    const diffY = Math.abs(calendarTouch.y - e.changedTouches[0].clientY);
+    
+    // Срабатывает только если свайп горизонтальный (> 50px) и мы не скроллим вверх-вниз (y < 40px)
+    if (Math.abs(diffX) > 50 && diffY < 40) {
+      if (diffX > 0) { // Свайп влево (Вперед)
+        if (isCalendarExpanded) {
+          setCalendarMonth(addMonths(calendarMonth, 1));
+        } else {
+          const nextWeek = addDays(selectedDate, 7);
+          setSelectedDate(nextWeek);
+          setCalendarMonth(startOfMonth(nextWeek));
+        }
+      } else { // Свайп вправо (Назад)
+        if (isCalendarExpanded) {
+          setCalendarMonth(subMonths(calendarMonth, 1));
+        } else {
+          const prevWeek = subDays(selectedDate, 7);
+          setSelectedDate(prevWeek);
+          setCalendarMonth(startOfMonth(prevWeek));
+        }
+      }
+    }
+    setCalendarTouch(null);
+  };
+
+  // Обработчики свайпов по карточкам (влево/вправо = следующий/предыдущий день)
+  const onScheduleTouchStart = (e) => setScheduleTouch({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
+  const onScheduleTouchEnd = (e) => {
+    if (!scheduleTouch) return;
+    const diffX = scheduleTouch.x - e.changedTouches[0].clientX;
+    const diffY = Math.abs(scheduleTouch.y - e.changedTouches[0].clientY);
+    
+    // Защита от ложных срабатываний при вертикальном скролле списка пар
+    if (Math.abs(diffX) > 50 && diffY < 40) {
+      if (diffX > 0) { // Влево (Завтра)
+        const nextDay = addDays(selectedDate, 1);
+        setSelectedDate(nextDay);
+        setCalendarMonth(startOfMonth(nextDay));
+      } else { // Вправо (Вчера)
+        const prevDay = subDays(selectedDate, 1);
+        setSelectedDate(prevDay);
+        setCalendarMonth(startOfMonth(prevDay));
+      }
+    }
+    setScheduleTouch(null);
+  };
 
   useEffect(() => {
     const savedData = localStorage.getItem('scheduleGroupsData');
@@ -202,7 +253,6 @@ export default function App() {
     );
   }
 
-  // Защита от сбоя при переключении групп
   const currentGroup = groupsData[selectedGroupIndex] || groupsData[0];
   if (!currentGroup) return null;
   
@@ -231,12 +281,11 @@ export default function App() {
   const parityText = selectedParity === 'even' ? 'Четная неделя' : 'Нечетная неделя';
   const selectedDateString = `${selectedDate.getFullYear()}-${selectedDate.getMonth() + 1}-${selectedDate.getDate()}`;
 
-  // Переменные для расчета живого времени
   const isTodayReal = isSameDay(selectedDate, now);
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
   return (
-    <div className="min-h-screen bg-app-bg pb-12 font-sans selection:bg-accent-blue selection:text-black relative">
+    <div className="min-h-screen bg-app-bg pb-12 font-sans selection:bg-accent-blue selection:text-black relative overflow-x-hidden">
       <div className="max-w-6xl mx-auto w-full">
         
         {/* Header */}
@@ -293,7 +342,11 @@ export default function App() {
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-10 px-5 lg:px-8 items-start">
           
           {/* ЛЕВАЯ КОЛОНКА: КАЛЕНДАРЬ */}
-          <div className="w-full lg:w-[380px] shrink-0 lg:sticky lg:top-8 z-10">
+          <div 
+            className="w-full lg:w-[380px] shrink-0 lg:sticky lg:top-8 z-10"
+            onTouchStart={onCalendarTouchStart}
+            onTouchEnd={onCalendarTouchEnd}
+          >
             <div className="bg-card-bg rounded-3xl p-4 lg:p-5 transition-all overflow-hidden relative shadow-lg">
               
               <div className="flex justify-between items-center mb-4 px-1">
@@ -372,7 +425,11 @@ export default function App() {
           </div>
 
           {/* ПРАВАЯ КОЛОНКА: РАСПИСАНИЕ НА ДЕНЬ */}
-          <div className="w-full flex-1 min-w-0">
+          <div 
+            className="w-full flex-1 min-w-0 pb-12"
+            onTouchStart={onScheduleTouchStart}
+            onTouchEnd={onScheduleTouchEnd}
+          >
             <div className="mb-5 flex justify-between items-end">
               <div>
                 <h2 className="text-xl lg:text-2xl font-bold leading-tight">{formattedHeaderDate}</h2>
@@ -398,7 +455,6 @@ export default function App() {
               ) : (
                 currentSchedule.map((lesson, idx) => {
                   
-                  // ЗАЩИЩЕННЫЙ ПАРСИНГ ВРЕМЕНИ
                   const timeStr = String(lesson.time || '');
                   const startMin = timeToMinutes(timeStr.split('-')[0]);
                   const endMin = timeToMinutes(timeStr.split('-')[1]);
@@ -411,11 +467,8 @@ export default function App() {
                     const prevTimeStr = String(currentSchedule[idx - 1].time || '');
                     const prevEndMin = timeToMinutes(prevTimeStr.split('-')[1]);
                     
-                    // Если данные адекватные, считаем перерыв
                     if (startMin > prevEndMin && prevEndMin > 0) {
                       breakMin = startMin - prevEndMin;
-                      
-                      // Проверяем идет ли перерыв прямо сейчас
                       if (isTodayReal && nowMinutes >= prevEndMin && nowMinutes < startMin) {
                         isBreakOngoing = true;
                         breakRemaining = startMin - nowMinutes;
