@@ -7,28 +7,35 @@ import {
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, addDays, subMonths, addMonths, isSameDay, isSameMonth, differenceInCalendarWeeks } from 'date-fns';
 import { parseSchedule } from './parser';
 
-// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (Защищенные от ошибок) ---
 const isRemoteLesson = (lesson) => {
   const searchStr = `${lesson.room || ''} ${lesson.type || ''} ${lesson.subject || ''}`.toLowerCase();
   return searchStr.includes('дист') || searchStr.includes('edu.rguk') || searchStr.includes('портал');
 };
 
-const getBreakMinutes = (prevEnd, currStart) => {
-  if (!prevEnd || !currStart) return 0;
-  const parseTime = (t) => {
-    const parts = t.trim().split(':');
-    if (parts.length !== 2) return 0;
-    return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
-  };
-  return parseTime(currStart) - parseTime(prevEnd);
+// Жесткая конвертация времени в минуты
+const timeToMinutes = (t) => {
+  if (!t) return 0;
+  const parts = String(t).trim().split(':');
+  if (parts.length !== 2) return 0;
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  if (isNaN(h) || isNaN(m)) return 0;
+  return h * 60 + m;
 };
 
-const formatBreakTime = (minutes) => {
-  if (minutes < 60) return `${minutes} минут`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
+// Защита от отрицательных чисел и NaN
+const formatTimeRemaining = (minutes) => {
+  let safeMinutes = parseInt(minutes, 10);
+  if (isNaN(safeMinutes) || safeMinutes < 0) safeMinutes = 0;
+  
+  if (safeMinutes < 60) return `${safeMinutes} мин`;
+  const h = Math.floor(safeMinutes / 60);
+  const m = safeMinutes % 60;
   return m === 0 ? `${h} ч` : `${h} ч ${m} мин`;
 };
+
+const formatBreakTime = (minutes) => formatTimeRemaining(minutes);
 
 const getWeekParityStr = (date) => {
   const isSpring = date.getMonth() < 7;
@@ -36,21 +43,6 @@ const getWeekParityStr = (date) => {
   const septFirst = new Date(currentAcademicYear, 8, 1);
   const weekDiff = differenceInCalendarWeeks(date, septFirst, { weekStartsOn: 1 });
   return weekDiff % 2 !== 0 ? 'even' : 'odd';
-};
-
-const isLessonOngoing = (lessonTimeStr, selectedDate, now) => {
-  if (!isSameDay(selectedDate, now)) return false;
-  
-  const [startStr, endStr] = lessonTimeStr.split('-');
-  if (!startStr || !endStr) return false;
-
-  const parseToMinutes = (t) => {
-    const [h, m] = t.trim().split(':').map(Number);
-    return h * 60 + m;
-  };
-
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  return currentMinutes >= parseToMinutes(startStr) && currentMinutes <= parseToMinutes(endStr);
 };
 
 const parseRoomInfo = (room) => {
@@ -66,13 +58,14 @@ const parseRoomInfo = (room) => {
   return { building: null, displayRoom: str };
 };
 
+
 export default function App() {
   const [groupsData, setGroupsData] = useState(null);
   const [selectedGroupIndex, setSelectedGroupIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  // Отслеживаем ширину экрана (Desktop или Mobile)
+  // Отслеживаем ширину экрана
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
 
   useEffect(() => {
@@ -166,7 +159,7 @@ export default function App() {
         localStorage.setItem('scheduleNotes', JSON.stringify(mergedNotes));
         alert('Заметки успешно импортированы!');
       } catch (err) {
-        alert('Ошибка файла. Убедитесь, что это файл .json с вашими заметками.');
+        alert('Ошибка файла.');
       }
     };
     reader.readAsText(file);
@@ -200,7 +193,7 @@ export default function App() {
           <CalendarDays className="text-accent-blue w-10 h-10" />
         </div>
         <h1 className="text-2xl font-bold mb-2">Расписание</h1>
-        <p className="text-gray-400 text-center mb-8 text-sm">Загрузите Excel-файл со вкладками групп, чтобы начать.</p>
+        <p className="text-gray-400 text-center mb-8 text-sm">Загрузите Excel-файл, чтобы начать.</p>
         <label className="relative cursor-pointer bg-accent-blue text-black font-semibold py-4 px-8 rounded-2xl w-full max-w-xs text-center transition active:scale-95">
           {loading ? "Обработка..." : "Выбрать Excel-файл"}
           <input type="file" className="hidden" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} />
@@ -209,7 +202,9 @@ export default function App() {
     );
   }
 
-  const currentGroup = groupsData[selectedGroupIndex];
+  // Защита от сбоя при переключении групп
+  const currentGroup = groupsData[selectedGroupIndex] || groupsData[0];
+  if (!currentGroup) return null;
   
   const showMonthView = isCalendarExpanded || isDesktop;
 
@@ -235,6 +230,10 @@ export default function App() {
   const formattedHeaderDate = `${fullDayNames[selectedDayOfWeek - 1]}, ${selectedDate.getDate()} ${monthsRuGenitive[selectedDate.getMonth()]}`;
   const parityText = selectedParity === 'even' ? 'Четная неделя' : 'Нечетная неделя';
   const selectedDateString = `${selectedDate.getFullYear()}-${selectedDate.getMonth() + 1}-${selectedDate.getDate()}`;
+
+  // Переменные для расчета живого времени
+  const isTodayReal = isSameDay(selectedDate, now);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
   return (
     <div className="min-h-screen bg-app-bg pb-12 font-sans selection:bg-accent-blue selection:text-black relative">
@@ -273,14 +272,14 @@ export default function App() {
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsMenuOpen(false)} />
                 <div className="absolute right-0 top-14 mt-1 w-64 bg-[#232325] border border-gray-700/50 rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col py-1 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
-                  <button onClick={handleClear} className="w-full text-left px-4 py-3.5 text-[15px] font-medium text-white hover:bg-white/10 active:bg-white/20 transition-colors flex items-center gap-3">
+                  <button onClick={handleClear} className="w-full text-left px-4 py-3.5 text-[15px] font-medium text-white hover:bg-white/10 transition-colors flex items-center gap-3">
                     <RefreshCw size={18} className="text-accent-blue" /> Загрузить новое
                   </button>
                   <div className="h-[1px] bg-gray-700/50 mx-4" />
-                  <button onClick={handleExportNotes} className="w-full text-left px-4 py-3.5 text-[15px] font-medium text-white hover:bg-white/10 active:bg-white/20 transition-colors flex items-center gap-3">
+                  <button onClick={handleExportNotes} className="w-full text-left px-4 py-3.5 text-[15px] font-medium text-white hover:bg-white/10 transition-colors flex items-center gap-3">
                     <Download size={18} className="text-gray-400" /> Экспорт заметок
                   </button>
-                  <label className="w-full text-left px-4 py-3.5 text-[15px] font-medium text-white hover:bg-white/10 active:bg-white/20 transition-colors flex items-center gap-3 cursor-pointer mb-0">
+                  <label className="w-full text-left px-4 py-3.5 text-[15px] font-medium text-white hover:bg-white/10 transition-colors flex items-center gap-3 cursor-pointer mb-0">
                     <Upload size={18} className="text-gray-400" /> Импорт заметок
                     <input type="file" accept=".json" className="hidden" onChange={handleImportNotes} />
                   </label>
@@ -290,7 +289,7 @@ export default function App() {
           </div>
         </header>
 
-        {/* --- ОСНОВНОЙ КОНТЕНТ (Грид для ПК, колонка для Мобилок) --- */}
+        {/* ОСНОВНОЙ КОНТЕНТ */}
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-10 px-5 lg:px-8 items-start">
           
           {/* ЛЕВАЯ КОЛОНКА: КАЛЕНДАРЬ */}
@@ -308,10 +307,10 @@ export default function App() {
                   )}
                 </button>
                 <div className={`flex gap-2 lg:gap-3 transition-opacity duration-300 ${showMonthView ? 'opacity-100 visible' : 'opacity-0 invisible hidden'}`}>
-                  <button onClick={() => setCalendarMonth(subMonths(calendarMonth, 1))} className="w-8 h-8 rounded-full bg-card-bg-light flex items-center justify-center active:scale-95 transition-transform hover:bg-white/10">
+                  <button onClick={() => setCalendarMonth(subMonths(calendarMonth, 1))} className="w-8 h-8 rounded-full bg-card-bg-light flex items-center justify-center hover:bg-white/10">
                     <ChevronLeft size={18} className="text-white" />
                   </button>
-                  <button onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))} className="w-8 h-8 rounded-full bg-card-bg-light flex items-center justify-center active:scale-95 transition-transform hover:bg-white/10">
+                  <button onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))} className="w-8 h-8 rounded-full bg-card-bg-light flex items-center justify-center hover:bg-white/10">
                     <ChevronRight size={18} className="text-white" />
                   </button>
                 </div>
@@ -333,9 +332,7 @@ export default function App() {
                   const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay();
                   const daySchedule = currentGroup.schedule[parity][dayOfWeek] || [];
                   
-                  // ПРОВЕРКА: Если пар > 0 и АБСОЛЮТНО ВСЕ пары дистанционные, тогда день оранжевый
                   const isDayRemote = daySchedule.length > 0 && daySchedule.every(isRemoteLesson);
-                  
                   const dots = Array.from({ length: Math.min(daySchedule.length, 5) });
 
                   let btnClass = 'text-gray-300 bg-transparent hover:bg-card-bg-light';
@@ -345,7 +342,7 @@ export default function App() {
                   if (isToday && !isSelected) btnClass = 'text-accent-blue bg-accent-blue/10 font-bold'; 
 
                   if (isSelected) {
-                    btnClass = isDayRemote ? 'bg-orange-400 text-black shadow-md shadow-orange-400/20 font-bold' : 'bg-accent-blue text-black shadow-md shadow-accent-blue/20 font-bold hover:bg-accent-blue hover:opacity-90';
+                    btnClass = isDayRemote ? 'bg-orange-400 text-black font-bold' : 'bg-accent-blue text-black font-bold';
                     dotClass = 'bg-black/50';
                   }
 
@@ -376,8 +373,6 @@ export default function App() {
 
           {/* ПРАВАЯ КОЛОНКА: РАСПИСАНИЕ НА ДЕНЬ */}
           <div className="w-full flex-1 min-w-0">
-            
-            {/* Заголовок дня */}
             <div className="mb-5 flex justify-between items-end">
               <div>
                 <h2 className="text-xl lg:text-2xl font-bold leading-tight">{formattedHeaderDate}</h2>
@@ -389,7 +384,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Список пар */}
             <div className="flex flex-col gap-3">
               {currentSchedule.length === 0 ? (
                 <div className="bg-card-bg rounded-3xl p-6 lg:p-8 flex items-center gap-5 mt-2 shadow-sm border border-gray-800/50">
@@ -403,15 +397,36 @@ export default function App() {
                 </div>
               ) : (
                 currentSchedule.map((lesson, idx) => {
+                  
+                  // ЗАЩИЩЕННЫЙ ПАРСИНГ ВРЕМЕНИ
+                  const timeStr = String(lesson.time || '');
+                  const startMin = timeToMinutes(timeStr.split('-')[0]);
+                  const endMin = timeToMinutes(timeStr.split('-')[1]);
+
                   let breakMin = 0;
+                  let isBreakOngoing = false;
+                  let breakRemaining = 0;
+
                   if (idx > 0) {
-                    const prevEnd = currentSchedule[idx - 1].time.split('-')[1];
-                    const currStart = lesson.time.split('-')[0];
-                    breakMin = getBreakMinutes(prevEnd, currStart);
+                    const prevTimeStr = String(currentSchedule[idx - 1].time || '');
+                    const prevEndMin = timeToMinutes(prevTimeStr.split('-')[1]);
+                    
+                    // Если данные адекватные, считаем перерыв
+                    if (startMin > prevEndMin && prevEndMin > 0) {
+                      breakMin = startMin - prevEndMin;
+                      
+                      // Проверяем идет ли перерыв прямо сейчас
+                      if (isTodayReal && nowMinutes >= prevEndMin && nowMinutes < startMin) {
+                        isBreakOngoing = true;
+                        breakRemaining = startMin - nowMinutes;
+                      }
+                    }
                   }
 
+                  const isOngoing = isTodayReal && nowMinutes >= startMin && nowMinutes <= endMin;
+                  const lessonRemaining = endMin > nowMinutes ? endMin - nowMinutes : 0;
+
                   const isRemote = isRemoteLesson(lesson);
-                  const isOngoing = isLessonOngoing(lesson.time, selectedDate, now);
                   const { building, displayRoom } = parseRoomInfo(lesson.room);
 
                   const noteKey = `${currentGroup.groupName}_${selectedDateString}_${lesson.time}_${lesson.subject}`;
@@ -428,26 +443,42 @@ export default function App() {
 
                   const timeBadgeClasses = isRemote ? 'bg-orange-500/20 text-orange-400' : 'bg-card-bg-light text-accent-blue';
                   const noteBtnClasses = hasNote ? 'bg-accent-blue/10 text-accent-blue' : 'bg-card-bg-light text-gray-400 hover:text-white';
+                  const ongoingBadgeColor = isRemote ? 'text-orange-400 bg-orange-500/20' : 'text-accent-blue bg-accent-blue/10';
+                  const ongoingDotColor = isRemote ? 'bg-orange-400' : 'bg-accent-blue';
 
                   return (
                     <React.Fragment key={idx}>
-                      {breakMin > 0 && (
-                        <div className="flex items-center justify-center my-2 opacity-80">
-                          <div className="h-[1px] flex-1 bg-gray-800"></div>
-                          <span className="text-xs text-gray-500 mx-4 font-medium tracking-wide">
-                            Перерыв {formatBreakTime(breakMin)}
+                      {breakMin > 0 && breakMin < 1440 && (
+                        <div className={`flex items-center justify-center my-2 transition-opacity duration-300 ${isBreakOngoing ? 'opacity-100' : 'opacity-80'}`}>
+                          <div className={`h-[1px] flex-1 transition-colors duration-300 ${isBreakOngoing ? 'bg-accent-blue/50' : 'bg-gray-800'}`}></div>
+                          <span className={`text-xs mx-4 tracking-wide transition-colors duration-300 ${isBreakOngoing ? 'text-accent-blue font-bold' : 'text-gray-500 font-medium'}`}>
+                            {isBreakOngoing 
+                              ? `Перемена, осталось ${formatTimeRemaining(breakRemaining)}` 
+                              : `Перерыв ${formatBreakTime(breakMin)}`
+                            }
                           </span>
-                          <div className="h-[1px] flex-1 bg-gray-800"></div>
+                          <div className={`h-[1px] flex-1 transition-colors duration-300 ${isBreakOngoing ? 'bg-accent-blue/50' : 'bg-gray-800'}`}></div>
                         </div>
                       )}
 
                       <div className={`${cardClasses} rounded-3xl p-5 lg:p-6 flex flex-col relative transition-all duration-300 shadow-sm hover:shadow-md`}>
-                        <div className="flex justify-between items-start mb-3 lg:mb-4">
-                          <span className={`text-sm font-semibold px-3 py-1.5 rounded-lg flex gap-2 ${timeBadgeClasses}`}>
-                            {lesson.num && <span className="opacity-80 border-r border-current pr-2">{lesson.num} пара</span>}
-                            <span>{lesson.time}</span>
-                          </span>
-                          {lesson.type && <span className="text-xs font-medium text-gray-400 border border-gray-700 px-2 py-1 rounded-md">{lesson.type}</span>}
+                        <div className="flex justify-between items-start mb-3 lg:mb-4 gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`text-sm font-semibold px-3 py-1.5 rounded-lg flex gap-2 ${timeBadgeClasses}`}>
+                              {lesson.num && <span className="opacity-80 border-r border-current pr-2">{lesson.num} пара</span>}
+                              <span>{lesson.time}</span>
+                            </span>
+                            {isOngoing && (
+                              <span className={`text-[13px] font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-2 ${ongoingBadgeColor}`}>
+                                <span className="relative flex h-2 w-2">
+                                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${ongoingDotColor}`}></span>
+                                  <span className={`relative inline-flex rounded-full h-2 w-2 ${ongoingDotColor}`}></span>
+                                </span>
+                                ещё {formatTimeRemaining(lessonRemaining)}
+                              </span>
+                            )}
+                          </div>
+                          {lesson.type && <span className="text-xs font-medium text-gray-400 border border-gray-700 px-2 py-1 rounded-md shrink-0">{lesson.type}</span>}
                         </div>
                         
                         <h3 className="font-semibold text-[17px] lg:text-[19px] leading-tight mb-2 pr-4">{lesson.subject}</h3>
@@ -498,7 +529,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* --- МОДАЛЬНОЕ ОКНО --- */}
       {isNoteModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setIsNoteModalOpen(false)}>
           <div className="bg-card-bg w-full max-w-md rounded-3xl p-6 shadow-2xl border border-gray-800" onClick={e => e.stopPropagation()}>
