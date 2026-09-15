@@ -88,60 +88,52 @@ export default function App() {
   }, []);
 
   const [selectedDate, setSelectedDate] = useState(now);
-  const [calendarMonth, setCalendarMonth] = useState(startOfMonth(now));
+  const [calendarDate, setCalendarDate] = useState(now);
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
 
-  // --- СВАЙПЫ (TOUCH EVENTS) ---
+  // --- СВАЙПЫ ---
   const [calendarTouch, setCalendarTouch] = useState(null);
   const [scheduleTouch, setScheduleTouch] = useState(null);
 
-  // Обработчики свайпов по календарю (влево/вправо = месяц или неделя)
   const onCalendarTouchStart = (e) => setCalendarTouch({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
   const onCalendarTouchEnd = (e) => {
     if (!calendarTouch) return;
     const diffX = calendarTouch.x - e.changedTouches[0].clientX;
     const diffY = Math.abs(calendarTouch.y - e.changedTouches[0].clientY);
     
-    // Срабатывает только если свайп горизонтальный (> 50px) и мы не скроллим вверх-вниз (y < 40px)
-    if (Math.abs(diffX) > 50 && diffY < 40) {
-      if (diffX > 0) { // Свайп влево (Вперед)
+    if (Math.abs(diffX) > 50 && diffY < 60) {
+      if (diffX > 0) { 
         if (isCalendarExpanded) {
-          setCalendarMonth(addMonths(calendarMonth, 1));
+          setCalendarDate(addMonths(calendarDate, 1));
         } else {
-          const nextWeek = addDays(selectedDate, 7);
-          setSelectedDate(nextWeek);
-          setCalendarMonth(startOfMonth(nextWeek));
+          setCalendarDate(addDays(calendarDate, 7));
         }
-      } else { // Свайп вправо (Назад)
+      } else { 
         if (isCalendarExpanded) {
-          setCalendarMonth(subMonths(calendarMonth, 1));
+          setCalendarDate(subMonths(calendarDate, 1));
         } else {
-          const prevWeek = subDays(selectedDate, 7);
-          setSelectedDate(prevWeek);
-          setCalendarMonth(startOfMonth(prevWeek));
+          setCalendarDate(subDays(calendarDate, 7));
         }
       }
     }
     setCalendarTouch(null);
   };
 
-  // Обработчики свайпов по карточкам (влево/вправо = следующий/предыдущий день)
   const onScheduleTouchStart = (e) => setScheduleTouch({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
   const onScheduleTouchEnd = (e) => {
     if (!scheduleTouch) return;
     const diffX = scheduleTouch.x - e.changedTouches[0].clientX;
     const diffY = Math.abs(scheduleTouch.y - e.changedTouches[0].clientY);
     
-    // Защита от ложных срабатываний при вертикальном скролле списка пар
-    if (Math.abs(diffX) > 50 && diffY < 40) {
-      if (diffX > 0) { // Влево (Завтра)
+    if (Math.abs(diffX) > 50 && diffY < 60) {
+      if (diffX > 0) {
         const nextDay = addDays(selectedDate, 1);
         setSelectedDate(nextDay);
-        setCalendarMonth(startOfMonth(nextDay));
-      } else { // Вправо (Вчера)
+        setCalendarDate(nextDay);
+      } else {
         const prevDay = subDays(selectedDate, 1);
         setSelectedDate(prevDay);
-        setCalendarMonth(startOfMonth(prevDay));
+        setCalendarDate(prevDay);
       }
     }
     setScheduleTouch(null);
@@ -259,12 +251,12 @@ export default function App() {
   const showMonthView = isCalendarExpanded || isDesktop;
 
   const gridStartDate = showMonthView 
-    ? startOfWeek(startOfMonth(calendarMonth), { weekStartsOn: 1 }) 
-    : startOfWeek(selectedDate, { weekStartsOn: 1 });
+    ? startOfWeek(startOfMonth(calendarDate), { weekStartsOn: 1 }) 
+    : startOfWeek(calendarDate, { weekStartsOn: 1 });
     
   const gridEndDate = showMonthView 
-    ? endOfWeek(endOfMonth(calendarMonth), { weekStartsOn: 1 }) 
-    : endOfWeek(selectedDate, { weekStartsOn: 1 });
+    ? endOfWeek(endOfMonth(calendarDate), { weekStartsOn: 1 }) 
+    : endOfWeek(calendarDate, { weekStartsOn: 1 });
 
   const calendarDays = eachDayOfInterval({ start: gridStartDate, end: gridEndDate });
 
@@ -354,16 +346,16 @@ export default function App() {
                   onClick={() => { if (!isDesktop) setIsCalendarExpanded(!isCalendarExpanded) }} 
                   className={`flex items-center gap-2 font-bold text-lg ${isDesktop ? 'cursor-default' : ''}`}
                 >
-                  {monthsRu[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
+                  {monthsRu[calendarDate.getMonth()]} {calendarDate.getFullYear()}
                   {!isDesktop && (
                     <ChevronDown size={18} className={`text-accent-blue transition-transform duration-300 ${isCalendarExpanded ? 'rotate-180' : ''}`} />
                   )}
                 </button>
                 <div className={`flex gap-2 lg:gap-3 transition-opacity duration-300 ${showMonthView ? 'opacity-100 visible' : 'opacity-0 invisible hidden'}`}>
-                  <button onClick={() => setCalendarMonth(subMonths(calendarMonth, 1))} className="w-8 h-8 rounded-full bg-card-bg-light flex items-center justify-center hover:bg-white/10">
+                  <button onClick={() => setCalendarDate(subMonths(calendarDate, 1))} className="w-8 h-8 rounded-full bg-card-bg-light flex items-center justify-center hover:bg-white/10">
                     <ChevronLeft size={18} className="text-white" />
                   </button>
-                  <button onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))} className="w-8 h-8 rounded-full bg-card-bg-light flex items-center justify-center hover:bg-white/10">
+                  <button onClick={() => setCalendarDate(addMonths(calendarDate, 1))} className="w-8 h-8 rounded-full bg-card-bg-light flex items-center justify-center hover:bg-white/10">
                     <ChevronRight size={18} className="text-white" />
                   </button>
                 </div>
@@ -379,7 +371,7 @@ export default function App() {
                 {calendarDays.map((date, idx) => {
                   const isSelected = isSameDay(date, selectedDate);
                   const isToday = isSameDay(date, now);
-                  const isCurrentMonth = isSameMonth(date, calendarMonth);
+                  const isCurrentMonth = isSameMonth(date, calendarDate);
                   
                   const parity = getWeekParityStr(date);
                   const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay();
@@ -404,7 +396,7 @@ export default function App() {
                       key={idx}
                       onClick={() => {
                         setSelectedDate(date);
-                        setCalendarMonth(startOfMonth(date));
+                        setCalendarDate(date);
                         if (!isDesktop) setIsCalendarExpanded(false);
                       }}
                       className={`aspect-square rounded-2xl flex flex-col items-center justify-center transition-all ${btnClass}`}
@@ -426,7 +418,7 @@ export default function App() {
 
           {/* ПРАВАЯ КОЛОНКА: РАСПИСАНИЕ НА ДЕНЬ */}
           <div 
-            className="w-full flex-1 min-w-0 pb-12"
+            className="w-full flex-1 min-w-0 pb-12 min-h-[65vh] lg:min-h-0"
             onTouchStart={onScheduleTouchStart}
             onTouchEnd={onScheduleTouchEnd}
           >
@@ -506,7 +498,7 @@ export default function App() {
                           <div className={`h-[1px] flex-1 transition-colors duration-300 ${isBreakOngoing ? 'bg-accent-blue/50' : 'bg-gray-800'}`}></div>
                           <span className={`text-xs mx-4 tracking-wide transition-colors duration-300 ${isBreakOngoing ? 'text-accent-blue font-bold' : 'text-gray-500 font-medium'}`}>
                             {isBreakOngoing 
-                              ? `Перемена, осталось ${formatTimeRemaining(breakRemaining)}` 
+                              ? `Перерыв ${formatBreakTime(breakMin)} - ещё ${formatTimeRemaining(breakRemaining)}` 
                               : `Перерыв ${formatBreakTime(breakMin)}`
                             }
                           </span>
