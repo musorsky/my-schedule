@@ -260,6 +260,9 @@ export default function App() {
 
   const calendarDays = eachDayOfInterval({ start: gridStartDate, end: gridEndDate });
 
+  // Логика кнопки "Сегодня": показываем, если выбран не сегодняшний день ИЛИ если сегодняшний день не видно в календаре
+  const showTodayButton = !isSameDay(selectedDate, now) || !calendarDays.some(d => isSameDay(d, now));
+
   const dayNamesShort = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
   const fullDayNames = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
   const monthsRu = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
@@ -342,15 +345,33 @@ export default function App() {
             <div className="bg-card-bg rounded-3xl p-4 lg:p-5 transition-all overflow-hidden relative shadow-lg">
               
               <div className="flex justify-between items-center mb-4 px-1">
-                <button 
-                  onClick={() => { if (!isDesktop) setIsCalendarExpanded(!isCalendarExpanded) }} 
-                  className={`flex items-center gap-2 font-bold text-lg ${isDesktop ? 'cursor-default' : ''}`}
-                >
-                  {monthsRu[calendarDate.getMonth()]} {calendarDate.getFullYear()}
-                  {!isDesktop && (
-                    <ChevronDown size={18} className={`text-accent-blue transition-transform duration-300 ${isCalendarExpanded ? 'rotate-180' : ''}`} />
+                
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => { if (!isDesktop) setIsCalendarExpanded(!isCalendarExpanded) }} 
+                    className={`flex items-center gap-2 font-bold text-lg ${isDesktop ? 'cursor-default' : ''}`}
+                  >
+                    {monthsRu[calendarDate.getMonth()]} {calendarDate.getFullYear()}
+                    {!isDesktop && (
+                      <ChevronDown size={18} className={`text-accent-blue transition-transform duration-300 ${isCalendarExpanded ? 'rotate-180' : ''}`} />
+                    )}
+                  </button>
+                  
+                  {/* КНОПКА "СЕГОДНЯ" */}
+                  {showTodayButton && (
+                    <button 
+                      onClick={() => {
+                        setSelectedDate(now);
+                        setCalendarDate(now);
+                        if (!isDesktop) setIsCalendarExpanded(false);
+                      }}
+                      className="px-3 py-1 bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20 text-xs font-semibold rounded-lg active:scale-95 transition-all animate-in fade-in slide-in-from-left-2 duration-300"
+                    >
+                      Сегодня
+                    </button>
                   )}
-                </button>
+                </div>
+
                 <div className={`flex gap-2 lg:gap-3 transition-opacity duration-300 ${showMonthView ? 'opacity-100 visible' : 'opacity-0 invisible hidden'}`}>
                   <button onClick={() => setCalendarDate(subMonths(calendarDate, 1))} className="w-8 h-8 rounded-full bg-card-bg-light flex items-center justify-center hover:bg-white/10">
                     <ChevronLeft size={18} className="text-white" />
